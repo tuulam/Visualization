@@ -4,27 +4,43 @@ from dash import dcc, html, Input, Output, State, ctx, dash_table
 import plotly.express as px
 
 # Load and clean your data
-df = pd.read_excel('sorted2.xlsx')
+df = pd.read_excel('sorted3.xlsx')
 df2 = pd.read_excel("environment.xlsx")
 
-env_columns = ['food_emissions_land_use',
-       'food_emissions_farm', 'food_emissions_animal_feed',
-       'food_emissions_processing', 'food_emissions_transport',
-       'food_emissions_retail', 'food_emissions_packaging',
-       'food_emissions_losses']
+env_columns = ['Food emissions of land use',
+       'Food emissions of farms', 'Food emissions of animal feed',
+       'Food emissions of processing', 'Food emissions of transport',
+       'Food emissions of retail', 'Food emissions of packaging',
+       'Food emissions of losses']
+	   
+# Recommended Daily Levels (example values, adjust as needed)
+recommended_daily_levels = {
+    'vitamin C, mg': '90 mg',
+    'vitamin A, µg': '900 µg',
+    'vitamin D, µg': '20 µg',
+	'vitamin E, µg': '4 µg',
+	'vitamin K, µg': '120 µg',
+    'vitamin B12, µg': '2.4 µg',
+	'thiamin, mg': '1.2 mg',
+    'folate, µg': '400 µg',
+    'iron, mg': '18 mg',
+	'carotenoids, mg': '2 mg',
+    'calcium, mg': '1300 mg',
+    'magnesium, mg': '420 mg'
+}
+
 
 # Fix all numeric columns that may contain commas instead of dots
-exclude = ['id', 'FOODNAME', 'FUCLASS', 'recs']
+exclude = ['id', 'FOODNAME', 'FOODCLASS', 'recs']
 numeric_columns = [col for col in df.columns if col not in exclude]
 
 for col in numeric_columns:
     df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-nutrients = ['energy (kJ)', 'fat (g)', 'carbohydrate (g)', 'protein (g)']
-vitamin_columns = ['thiamin (vitamin B1) (mg)', 'vitamin A (µg)', 'carotenoids (µg)',
-       'vitamin B-12 (cobalamin) (µg)', 'vitamin C (ascorbic acid) (mg)',
-       'vitamin D (µg)', 'vitamin E  (mg)', 'vitamin K (µg)']
+nutrients = ['energy (kJ)', 'energy (kCal)', 'fat (g)', 'carbohydrate (g)', 'protein (g)']
+vitamin_columns = ['thiamin, mg', 'vitamin A, µg', 'carotenoids, mg',
+       'vitamin B12, µg', 'vitamin C, mg', 'vitamin D, µg', 'vitamin E, µg', 'vitamin K, µg']
 
 for col in ['CO2/100g'] + nutrients + vitamin_columns:
     df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -41,7 +57,7 @@ app.layout = html.Div([
 
             html.Div([
                 html.P("Select the nutrient you are interested in from the dropdown menu. The higher the nutrient value of the food, the higher it appears in the plot. High carbon dioxide emissions move the food to the right."),
-                html.P("Click the FUCLASS legend items to filter food categories. Click a food dot in the plot to see its nutrition details below."),
+                html.P("Click the FOODCLASS legend items to filter food categories. Click a food dot in the plot to see its nutrition details below."),
             ], style={"padding": "10px","backgroundColor": "#f9f9f9","border": "1px solid #ccc","borderRadius": "10px","marginBottom": "20px"}),
 
 
@@ -91,7 +107,8 @@ app.layout = html.Div([
                 columns=[
                    {"name": "Food", "id": "Food"},
                    {"name": "Quantity (g)", "id": "Quantity"},
-                   {"name": "Energy (kJ)", "id": "Energy"},
+				   {"name": "Energy (kJ)", "id": "Energy"},
+                   {"name": "Energy (kCal)", "id": "Calories"},
                    {"name": "CO₂ (g)", "id": "CO2"},
                    {"name": "", "id": "Delete", "presentation": "markdown"}
                 ],
@@ -103,7 +120,16 @@ app.layout = html.Div([
 				
 			dcc.Store(id='meal-storage', data=[]),
             html.Div(id='totals-output'),            
-            dcc.Graph(id="meal-pie-chart")  # <- Put graph directly, no need for extra html.Div
+            dcc.Graph(id="meal-pie-chart"),
+
+            html.Div([
+                html.P("It is recommended to eat at least 500 g of vegetables, fruit, berries, and mushrooms. Of this amount, half should consist of berries and fruit, and the rest vegetables."),
+                html.P("It is recommended to eat fish two to three times a week, using a variety of different species in turn.Your weekly intake of meat products and red meat should not exceed 500 g. One portion of fish or meat, when cooked, weighs some 100–150 g."),
+				html.P("You can have 30 g of nuts and seeds a day. Legumes are recommended at 50–100 g per day."),
+				html.P("The recommended daily intake of cereal products, which include cooked whole grain pasta, barley or rice, or some other whole grain side dish, or a slice of bread, is 600 ml for women and 900 ml for men. At least half of this amount should be whole grain cereals."),
+				html.P("It is not recommended to increase the current consumption of poultry meat for environmental reasons. At most, one egg per day can be part of a health-promoting diet.")
+            ], style={"padding": "10px","backgroundColor": "#f9f9f9","border": "1px solid #ccc","borderRadius": "10px","marginBottom": "20px"}),
+
         ]),
 
         dcc.Tab(label='Top Vitamin Foods', children=[
@@ -126,13 +152,13 @@ app.layout = html.Div([
     Input('y-axis-dropdown', 'value')
 )
 def update_scatter(selected_nutrient):
-    df_plot = df_clean[['CO2/100g', selected_nutrient, 'FOODNAME', 'FUCLASS']].dropna()
+    df_plot = df_clean[['CO2/100g', selected_nutrient, 'FOODNAME', 'FOODCLASS']].dropna()
     fig = px.scatter(
         df_plot,
         x='CO2/100g',
         y=selected_nutrient,
         hover_name='FOODNAME',
-        color='FUCLASS',
+        color='FOODCLASS',
         labels={'CO2/100g': 'CO₂ Emissions (g/100g)', selected_nutrient: selected_nutrient},
         title=f'{selected_nutrient} vs. CO2 Emissions'
     )
@@ -162,17 +188,21 @@ def update_food_details(click_data):
     Output('effect-plot', 'figure'),
     Input('emission-dropdown', 'value') 
 )
+
 def update_environmental_charts(selected_effect):
     env_df = df2[['Entity'] + env_columns].dropna()
     fig = px.bar(
-        env_df.sort_values(by=selected_effect, ascending=False).head(20),
+        env_df.sort_values(by=selected_effect, ascending=False).round(2).head(20),
         x='Entity',
         y=selected_effect,
         color='Entity',
         title=f"Top 20 Foods by {selected_effect}",
-        template='plotly_white'  # <-- This is the fix
+        template='plotly_white'  
     )
-    fig.update_layout(xaxis_tickangle=-45)
+    fig.update_layout(
+	    xaxis_tickangle=-45, 
+        xaxis_title=None,
+        yaxis_title=None)
     return fig
 
 @app.callback(
@@ -206,61 +236,56 @@ def handle_meal_update(n_clicks, active_cell, selected_food, quantity, current_d
     triggered_id = ctx.triggered_id
     current_data = current_data or []
 
-    # Deleting a row: if the active cell is in the "Delete" column,
-    # remove that row from current_data.
+    # Deleting a row
     if triggered_id == 'meal-table' and active_cell and active_cell.get('column_id') == 'Delete':
         idx = active_cell['row']
         if 0 <= idx < len(current_data):
             current_data.pop(idx)
 
-    # Adding a food: if the Add button was clicked and a food and quantity are selected,
-    # then create a new entry and append it to current_data.
+    # Adding a food
     elif triggered_id == 'add-button' and selected_food and quantity:
-        # Get the row of data for the selected food
         row = df_clean[df_clean['FOODNAME'] == selected_food].iloc[0]
         energy = row['energy (kJ)'] * quantity / 100
+        calories = row['energy (kCal)'] * quantity / 100
         co2 = row['CO2/100g'] * quantity / 100
-        protein = row['protein (g)'] * quantity / 100  # <--- Define it here
-        recs = row['recs']
+        protein = row['protein (g)'] * quantity / 100
 
-    new_entry = {
-        "Food": selected_food,
-        "Quantity": quantity,
-        "Energy": round(energy, 2),
-        "CO2": round(co2, 2),
-        "protein (g)": round(protein, 2),  # <--- Store it
-        "Delete": '[🗑️](#)'
-    }
-    current_data.append(new_entry)
+        new_entry = {
+            "Food": selected_food,
+            "Quantity": quantity,
+            "Energy": round(energy, 2),
+            "Calories": round(calories, 2),
+            "CO2": round(co2, 2),
+            "protein (g)": round(protein, 2),
+            "Delete": '[🗑️](#)'
+        }
+        current_data.append(new_entry)
 
-
-
-    # Ensure that every row in the data has a Delete cell.
+    # Ensure every row has a Delete cell
     for row in current_data:
         row["Delete"] = '[🗑️](#)'
 
     # Calculate totals
     total_energy = round(sum(item['Energy'] for item in current_data), 2)
+    total_calories = round(sum(item['Calories'] for item in current_data), 2)
     total_co2 = round(sum(item['CO2'] for item in current_data), 2)
     total_protein = round(sum(item['protein (g)'] for item in current_data), 2)
-	
+
     totals_div = html.Div([
         html.H4("Total for Meal"),
         html.P(f"Total Energy: {total_energy} kJ"),
+        html.P(f"Total Calories: {total_calories} kCal"),
         html.P(f"Total CO2: {total_co2} g"),
-		html.P(f"Total Protein: {total_protein} g")
-    ])	
+        html.P(f"Total Protein: {total_protein} g")
+    ])
 
-    protein = row['protein (g)'] * quantity / 100
-	
-	# Create the pie chart using sunburst to allow color by recs
+    # Create the pie/sunburst chart
     df_meal = pd.DataFrame(current_data)
     if not df_meal.empty:
         df_meal_grouped = df_meal.groupby(['Food'], as_index=False).first()
         df_meal_grouped['recs'] = df_meal_grouped['Food'].map(
             df_clean.set_index('FOODNAME')['recs'].to_dict()
         )
-
         fig = px.sunburst(
             df_meal_grouped,
             path=['recs', 'Food'],
@@ -276,14 +301,8 @@ def handle_meal_update(n_clicks, active_cell, selected_food, quantity, current_d
             title='Meal Composition by Food'
         )
 
+    return current_data, current_data, totals_div, None, [], fig
 
-
-    return (
-        current_data,  # Updated meal-storage.data
-        current_data,  # Updated meal-table.data
-        totals_div,
-        None, [], fig
-    )
 
 
 @app.callback(
@@ -291,21 +310,35 @@ def handle_meal_update(n_clicks, active_cell, selected_food, quantity, current_d
     Input('vitamin-dropdown', 'value')
 )
 def top_vitamin_plot(vitamin):
-    df_vit = df_clean[['FOODNAME', vitamin, 'FUCLASS', 'CO2/100g']].dropna()
+    df_vit = df_clean[['FOODNAME', vitamin, 'FOODCLASS', 'CO2/100g', 'energy (kJ)']].dropna()
     df_vit = df_vit.sort_values(by=vitamin, ascending=False).head(15)
+    df_vit['Calories (kcal)'] = (df_vit['energy (kJ)'] / 4.184).round(1)
     food_order = df_vit['FOODNAME'].tolist()
+
+    rdl = recommended_daily_levels.get(vitamin, 'N/A')
 
     fig = px.bar(
         df_vit,
         x='FOODNAME',
         y=vitamin,
-        color='FUCLASS',
-        text=df_vit['CO2/100g'].round(2).astype(str) + " g CO₂",
+        color='FOODCLASS',
         category_orders={'FOODNAME': food_order}
     )
 
+    fig.update_traces(
+        text=None,
+        customdata=df_vit[['CO2/100g', 'Calories (kcal)']].values,
+        hovertemplate=(
+            "<b>%{x}</b><br>" +
+            "{}: %{{y}}<br>".format(vitamin) +
+            "CO₂: %{customdata[0]:.2f} g<br>" +
+			"Calories: %{customdata[1]:.1f } kCal<br>" +
+            "<extra></extra>"
+        )
+    )
+
     fig.update_layout(
-        title_text=f"Top 15 Foods Rich in {vitamin}",
+        title_text=f"Top 15 Foods Rich in {vitamin} (Recommended daily level: {rdl})",
         title_x=0.5,
         showlegend=True,
         xaxis_title=None,
@@ -314,15 +347,7 @@ def top_vitamin_plot(vitamin):
         margin=dict(t=100, b=120)
     )
 
-    fig.update_traces(
-        textposition='outside',
-        cliponaxis=False
-    )
-
-    return fig
-	
-
-	
+    return fig	
 
 
 if __name__ == "__main__":
