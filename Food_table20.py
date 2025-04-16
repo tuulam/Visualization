@@ -2,10 +2,13 @@ import pandas as pd
 import dash
 from dash import dcc, html, Input, Output, State, ctx, dash_table
 import plotly.express as px
+from dash import MATCH, ALL
 
 # Load and clean your data
 df = pd.read_excel('sorted3.xlsx')
 df2 = pd.read_excel("environment.xlsx")
+
+carbon_threshold = 50
 
 env_columns = ['Food emissions of land use',
        'Food emissions of farms', 'Food emissions of animal feed',
@@ -47,8 +50,23 @@ for col in ['CO2/100g'] + nutrients + vitamin_columns:
 
 df_clean = df.dropna(subset=['CO2/100g'] + nutrients)
 
+def find_alternatives(food_row, df, co2_threshold=carbon_threshold, tolerance=5):
+    df_other = df[df['FOODNAME'] != food_row['FOODNAME']]
+    df_low_co2 = df_other[df_other['CO2/100g'] < co2_threshold]
+
+    protein = food_row['protein (g)']
+    calories = food_row['energy (kCal)']
+
+    alternatives = df_low_co2[
+        (df_low_co2['protein (g)'].between(protein - tolerance, protein + tolerance)) &
+        (df_low_co2['energy (kCal)'].between(calories - 50, calories + 50))
+    ]
+
+    return alternatives[['FOODNAME', 'protein (g)', 'energy (kCal)', 'CO2/100g']]
+
 # Initialize Dash app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
+
 
 app.layout = html.Div([
     dcc.Tabs([
@@ -101,6 +119,11 @@ app.layout = html.Div([
             dcc.Input(id='food-quantity', name = 'food-quantity', type='number', value=100),
 
             html.Button('Add to Meal', id='add-button', n_clicks=0),
+			
+			html.Div(id='sustainability-recommendation'),
+			html.Div(id='sustainability-warning'),
+
+
 
             dash_table.DataTable(
                 id='meal-table',
@@ -206,51 +229,57 @@ def update_environmental_charts(selected_effect):
     return fig
 
 @app.callback(
-    Output('meal-food-dropdown', 'options'),
-    Input('meal-recs-dropdown', 'value')
-)
-def update_food_dropdown(selected_recs):
-    if selected_recs is None:
-        return []
-    filtered_df = df_clean[df_clean['recs'] == selected_recs]
-    return [{'label': food, 'value': food} for food in sorted(filtered_df['FOODNAME'].unique())]
-
-@app.callback(
     Output('meal-storage', 'data'),
     Output('meal-table', 'data'),
     Output('totals-output', 'children'),
     Output('meal-table', 'active_cell'),
     Output('meal-table', 'selected_cells'),
     Output('meal-pie-chart', 'figure'),
+    Output('sustainability-recommendation', 'children'),
+    Output('meal-food-dropdown', 'value'),
+    Output('food-quantity', 'value'),
+    Output('meal-food-dropdown', 'options'),
     Input('add-button', 'n_clicks'),
     Input('meal-table', 'active_cell'),
+    Input({'type': 'alt-button', 'index': ALL}, 'n_clicks'),
+    Input('meal-recs-dropdown', 'value'),
     State('meal-food-dropdown', 'value'),
     State('food-quantity', 'value'),
     State('meal-storage', 'data'),
     prevent_initial_call=True
 )
-def update_meal(n_clicks, active_cell, selected_food, quantity, current_data):
-    return handle_meal_update(n_clicks, active_cell, selected_food, quantity, current_data)
-
-def handle_meal_update(n_clicks, active_cell, selected_food, quantity, current_data):
+def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, selected_food, quantity, current_data):
     triggered_id = ctx.triggered_id
     current_data = current_data or []
+    recommendation_div = html.Div()
+    set_value = None
 
-    # Deleting a row
+    # 1. Handle deletion (if clicking the delete button)
     if triggered_id == 'meal-table' and active_cell and active_cell.get('column_id') == 'Delete':
         idx = active_cell['row']
         if 0 <= idx < len(current_data):
             current_data.pop(idx)
+        recommendation_div = html.Div()
 
-    # Adding a food
-    elif triggered_id == 'add-button' and selected_food and quantity:
+    # 2. Handle clicking an alternative button (replace food)
+    elif isinstance(triggered_id, dict) and triggered_id.get('type') == 'alt-button':
+        # Find the index of the original food item in the table
+        selected_food = triggered_id['index']  # the alternative food selected
+        quantity = 100  # default quantity (you can make this dynamic if needed)
+
+        # Find the original food entry in the meal storage and remove it
+        food_idx = next((i for i, item in enumerate(current_data) if item['Food'] == selected_food), None)
+        if food_idx is not None:
+            current_data.pop(food_idx)  # Remove the original food from the table
+
+        # Add the alternative food to the meal storage
         row = df_clean[df_clean['FOODNAME'] == selected_food].iloc[0]
         energy = row['energy (kJ)'] * quantity / 100
         calories = row['energy (kCal)'] * quantity / 100
         co2 = row['CO2/100g'] * quantity / 100
         protein = row['protein (g)'] * quantity / 100
 
-        new_entry = {
+        current_data.append({
             "Food": selected_food,
             "Quantity": quantity,
             "Energy": round(energy, 2),
@@ -258,50 +287,108 @@ def handle_meal_update(n_clicks, active_cell, selected_food, quantity, current_d
             "CO2": round(co2, 2),
             "protein (g)": round(protein, 2),
             "Delete": '[🗑️](#)'
-        }
-        current_data.append(new_entry)
+        })
 
-    # Ensure every row has a Delete cell
-    for row in current_data:
-        row["Delete"] = '[🗑️](#)'
+        # Check for sustainable alternatives again after replacing
+        if row['CO2/100g'] > carbon_threshold:
+            alternatives = find_alternatives(row, df_clean)
+            if not alternatives.empty:
+                recommendation_div = html.Div([  # Provide alternatives as buttons
+                    html.P("🌍 This item has high CO₂ emissions. Consider these alternatives:"),
+                    html.Div([
+                        html.Button(
+                            f"{alt['FOODNAME']} (CO₂: {alt['CO2/100g']}g, Protein: {alt['protein (g)']}g)",
+                            id={'type': 'alt-button', 'index': alt['FOODNAME']},
+                            n_clicks=0,
+                            style={'margin': '3px'}
+                        )
+                        for _, alt in alternatives.head(3).iterrows()
+                    ])
+                ])
+            else:
+                recommendation_div = html.P("🌍 This item has high CO₂ emissions, but no good alternative was found.")
+        else:
+            recommendation_div = html.Div()
 
-    # Calculate totals
+    # 3. Handle add button to add food to table
+    elif triggered_id == 'add-button' and selected_food and quantity:
+        row = df_clean[df_clean['FOODNAME'] == selected_food].iloc[0]
+        energy = row['energy (kJ)'] * quantity / 100
+        calories = row['energy (kCal)'] * quantity / 100
+        co2 = row['CO2/100g'] * quantity / 100
+        protein = row['protein (g)'] * quantity / 100
+
+        current_data.append({
+            "Food": selected_food,
+            "Quantity": quantity,
+            "Energy": round(energy, 2),
+            "Calories": round(calories, 2),
+            "CO2": round(co2, 2),
+            "protein (g)": round(protein, 2),
+            "Delete": '[🗑️](#)'
+        })
+
+        # Check for sustainable alternatives
+        if row['CO2/100g'] > 2.5:
+            alternatives = find_alternatives(row, df_clean)
+            if not alternatives.empty:
+                recommendation_div = html.Div([  # Provide alternatives as buttons
+                    html.P("🌍 This item has high CO₂ emissions. Consider these alternatives:"),
+                    html.Div([
+                        html.Button(
+                            f"{alt['FOODNAME']} (CO₂: {alt['CO2/100g']}g, Protein: {alt['protein (g)']}g)",
+                            id={'type': 'alt-button', 'index': alt['FOODNAME']},
+                            n_clicks=0,
+                            style={'margin': '3px'}
+                        )
+                        for _, alt in alternatives.head(3).iterrows()
+                    ])
+                ])
+            else:
+                recommendation_div = html.P("🌍 This item has high CO₂ emissions, but no good alternative was found.")
+        else:
+            recommendation_div = html.Div()
+
+    # 4. Update dropdown options based on category
+    if selected_recs is not None:
+        filtered_df = df_clean[df_clean['recs'] == selected_recs]
+        dropdown_options = [{'label': food, 'value': food} for food in sorted(filtered_df['FOODNAME'].unique())]
+    else:
+        dropdown_options = []
+
+    # 5. Totals
     total_energy = round(sum(item['Energy'] for item in current_data), 2)
     total_calories = round(sum(item['Calories'] for item in current_data), 2)
     total_co2 = round(sum(item['CO2'] for item in current_data), 2)
     total_protein = round(sum(item['protein (g)'] for item in current_data), 2)
-
     totals_div = html.Div([
         html.H4("Total for Meal"),
         html.P(f"Total Energy: {total_energy} kJ"),
         html.P(f"Total Calories: {total_calories} kCal"),
-        html.P(f"Total CO2: {total_co2} g"),
+        html.P(f"Total CO₂: {total_co2} g"),
         html.P(f"Total Protein: {total_protein} g")
     ])
 
-    # Create the pie/sunburst chart
+    # 6. Pie chart
     df_meal = pd.DataFrame(current_data)
     if not df_meal.empty:
         df_meal_grouped = df_meal.groupby(['Food'], as_index=False).first()
-        df_meal_grouped['recs'] = df_meal_grouped['Food'].map(
-            df_clean.set_index('FOODNAME')['recs'].to_dict()
-        )
-        fig = px.sunburst(
-            df_meal_grouped,
-            path=['recs', 'Food'],
-            values='Quantity',
-            color='recs',
-            hover_data={'Quantity': True},
-            title='Meal Composition by Food Category and Item'
-        )
+        df_meal_grouped['recs'] = df_meal_grouped['Food'].map(df_clean.set_index('FOODNAME')['recs'].to_dict())
+        fig = px.sunburst(df_meal_grouped, path=['recs', 'Food'], values='Quantity', color='recs')
     else:
-        fig = px.pie(
-            names=['None'],
-            values=[1],
-            title='Meal Composition by Food'
-        )
+        fig = px.pie(names=['None'], values=[1], title='Meal Composition')
 
-    return current_data, current_data, totals_div, None, [], fig
+    return (
+        current_data,
+        current_data,
+        totals_div,
+        None, [],  # active_cell, selected_cells
+        fig,
+        recommendation_div,
+        set_value,  # dropdown value
+        None,  # reset quantity
+        dropdown_options
+    )
 
 
 
@@ -347,8 +434,7 @@ def top_vitamin_plot(vitamin):
         margin=dict(t=100, b=120)
     )
 
-    return fig	
+    return fig
 
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+if __name__ == '__main__':
+    app.run(debug=True)
