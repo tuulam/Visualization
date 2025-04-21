@@ -3,10 +3,12 @@ import dash
 from dash import dcc, html, Input, Output, State, ctx, dash_table
 import plotly.express as px
 from dash import MATCH, ALL
+import plotly.colors as pc
+
 
 # Load and clean your data
-df = pd.read_excel('sorted3.xlsx')
-df2 = pd.read_excel("environment.xlsx")
+df = pd.read_excel('sorted4.xlsx')
+df2 = pd.read_excel("environ_grams.xlsx")
 
 carbon_threshold = 50
 
@@ -34,7 +36,7 @@ recommended_daily_levels = {
 
 
 # Fix all numeric columns that may contain commas instead of dots
-exclude = ['id', 'FOODNAME', 'FOODCLASS', 'recs']
+exclude = ['id', 'FOODNAME', 'FOODCLASS', 'recs', 'Categories']
 numeric_columns = [col for col in df.columns if col not in exclude]
 
 for col in numeric_columns:
@@ -49,6 +51,16 @@ for col in ['CO2/100g'] + nutrients + vitamin_columns:
     df[col] = pd.to_numeric(df[col], errors='coerce')
 
 df_clean = df.dropna(subset=['CO2/100g'] + nutrients)
+
+# Get unique categories from both datasets
+categories = df_clean['Categories'].dropna().unique()
+entities = df2['Categories'].dropna().unique()
+
+
+# Generate consistent color map (this one uses Plotly’s 'Plotly' colorway)
+category_colors = px.colors.qualitative.Plotly
+color_map_categories = {cat: category_colors[i % len(category_colors)] for i, cat in enumerate(categories)}
+color_map_entities = {ent: category_colors[i % len(category_colors)] for i, ent in enumerate(entities)}
 
 def find_alternatives(food_row, df, co2_threshold=carbon_threshold, tolerance=5):
     df_other = df[df['FOODNAME'] != food_row['FOODNAME']]
@@ -70,12 +82,12 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
 app.layout = html.Div([
     dcc.Tabs([
-        dcc.Tab(label='Scatter & Food Details', children=[
-            html.H1("Food Nutrition vs. CO2 Emissions"),
+        dcc.Tab(label='Food Details', children=[
+            html.H1("Food Nutrition vs. CO2 Emissions", style={'fontWeight': 'bold', 'color': 'green'}),
 
             html.Div([
                 html.P("Select the nutrient you are interested in from the dropdown menu. The higher the nutrient value of the food, the higher it appears in the plot. High carbon dioxide emissions move the food to the right."),
-                html.P("Click the FOODCLASS legend items to filter food categories. Click a food dot in the plot to see its nutrition details below."),
+                html.P("Click the Categories legend items to filter food categories. Click a food dot in the plot to see its nutrition details below."),
             ], style={"padding": "10px","backgroundColor": "#f9f9f9","border": "1px solid #ccc","borderRadius": "10px","marginBottom": "20px"}),
 
 
@@ -91,26 +103,43 @@ app.layout = html.Div([
         ]),
 		
 	    dcc.Tab(label='Environmental Effects', children=[
-            html.H2("Environmental Impact of Foods"),
+            html.H1("Environmental Impact of Foods", style={'fontWeight': 'bold', 'color': 'red'}),
             html.Label("Select an Environmental Effect:"),
             dcc.Dropdown(
                 id='emission-dropdown',
                 options=[{'label': v, 'value': v} for v in env_columns],
                 value=env_columns[0]
             ),
-            dcc.Graph(id='effect-plot')
+            dcc.Graph(id='effect-plot'),
+			
+            html.Div(id='total-impact-output', style={"marginTop": "20px", "fontWeight": "bold"}),
+			
+            html.Div(id='sustainability-tip', style={"marginTop": "10px", "color": "green", "fontStyle": "italic"})			
         ]),
-
+		
+        
         dcc.Tab(label='Meal Planner', children=[
-            html.H2("Meal Planner"),
+            html.H1("Meal Planner", style={'fontWeight': 'bold', 'color': 'green'}),
+			
+			html.Div([
+			    html.H1("Nutrition recommendations and food-based dietary guidelines by Finnish Food Authority", style={'fontWeight': 'bold', 'color': 'green'}),
+                html.P("It is recommended to eat at least 500 g of vegetables, fruit, berries, and mushrooms. Of this amount, half should consist of berries and fruit, and the rest vegetables.It is recommended to consume at least 500 grams of vegetables, fruits, berries, and mushrooms daily. Half of this amount should come from berries and fruits, and the other half from vegetables."),
+                html.P("Fish should be eaten two to three times per week, with a variety of species included in rotation. The total weekly intake of red meat and meat products should not exceed 500 grams. A typical cooked portion of fish or meat weighs approximately 100 to 150 grams."),
+				html.P("A daily intake of 30 grams of nuts and seeds is recommended. Legumes should be consumed in amounts of 50 to 100 grams per day."),
+				html.P("The recommended daily intake of cereal products—such as cooked whole grain pasta, barley, rice, or whole grain bread—is approximately 600 ml for women and 900 ml for men. At least half of this should come from whole grain sources."),
+				html.P("For environmental reasons, it is not recommended to increase current levels of poultry consumption. Including up to one egg per day can be part of a health-promoting diet.")
+            ], style={"padding": "10px","backgroundColor": "#f9f9f9","border": "1px solid #ccc","borderRadius": "10px","marginBottom": "20px"}),
 
-            html.Label("Select Food Category (recs):"),
+
+            html.Label("Select Food Category (Categories):"),
             dcc.Dropdown(
                 id='meal-recs-dropdown',
-                options=[{'label': c, 'value': c} for c in sorted(df_clean['recs'].dropna().unique())],
+                options=[{'label': c, 'value': c} for c in sorted(df_clean['Categories'].dropna().unique())],
                 value=None,
 				placeholder="Choose a food category"
             ),
+			
+			
 
             html.Label("Select Food:"),
             dcc.Dropdown(id='meal-food-dropdown', placeholder="Choose a food category"),
@@ -122,8 +151,6 @@ app.layout = html.Div([
 			
 			html.Div(id='sustainability-recommendation'),
 			html.Div(id='sustainability-warning'),
-
-
 
             dash_table.DataTable(
                 id='meal-table',
@@ -145,18 +172,11 @@ app.layout = html.Div([
             html.Div(id='totals-output'),            
             dcc.Graph(id="meal-pie-chart"),
 
-            html.Div([
-                html.P("It is recommended to eat at least 500 g of vegetables, fruit, berries, and mushrooms. Of this amount, half should consist of berries and fruit, and the rest vegetables."),
-                html.P("It is recommended to eat fish two to three times a week, using a variety of different species in turn.Your weekly intake of meat products and red meat should not exceed 500 g. One portion of fish or meat, when cooked, weighs some 100–150 g."),
-				html.P("You can have 30 g of nuts and seeds a day. Legumes are recommended at 50–100 g per day."),
-				html.P("The recommended daily intake of cereal products, which include cooked whole grain pasta, barley or rice, or some other whole grain side dish, or a slice of bread, is 600 ml for women and 900 ml for men. At least half of this amount should be whole grain cereals."),
-				html.P("It is not recommended to increase the current consumption of poultry meat for environmental reasons. At most, one egg per day can be part of a health-promoting diet.")
-            ], style={"padding": "10px","backgroundColor": "#f9f9f9","border": "1px solid #ccc","borderRadius": "10px","marginBottom": "20px"}),
-
+            
         ]),
 
-        dcc.Tab(label='Top Vitamin Foods', children=[
-            html.H2("Top 15 Foods Rich in Selected Vitamin"),
+        dcc.Tab(label='Top Vitamin Sources', children=[
+            html.H1("Top 15 Foods Rich in Selected Vitamin", style={'fontWeight': 'bold', 'color': 'green'}),
             html.Label("Select a Vitamin:"),
             dcc.Dropdown(
                 id='vitamin-dropdown',
@@ -173,15 +193,18 @@ app.layout = html.Div([
 @app.callback(
     Output('scatter-plot', 'figure'),
     Input('y-axis-dropdown', 'value')
+	
 )
+
 def update_scatter(selected_nutrient):
-    df_plot = df_clean[['CO2/100g', selected_nutrient, 'FOODNAME', 'FOODCLASS']].dropna()
+    df_plot = df_clean[['CO2/100g', selected_nutrient, 'FOODNAME', 'Categories']].dropna()
     fig = px.scatter(
         df_plot,
         x='CO2/100g',
         y=selected_nutrient,
         hover_name='FOODNAME',
-        color='FOODCLASS',
+        color='Categories',
+        color_discrete_map=color_map_categories, 
         labels={'CO2/100g': 'CO₂ Emissions (g/100g)', selected_nutrient: selected_nutrient},
         title=f'{selected_nutrient} vs. CO2 Emissions'
     )
@@ -202,31 +225,66 @@ def update_food_details(click_data):
         return html.P("Food not found.")
     
     record = row.iloc[0].to_dict()
+
+    # Format each value: round floats to 2 decimal places
+    formatted_record = {k: (f"{v:.2f}" if isinstance(v, (float, int)) else v) for k, v in record.items()}
+
     return html.Div([
         html.H4(f"Details for {food_name}"),
-        html.Ul([html.Li(f"{k}: {v}") for k, v in record.items()])
+        html.Ul([html.Li(f"{k}: {v}") for k, v in formatted_record.items()])
     ])
+
 	
 @app.callback(
     Output('effect-plot', 'figure'),
     Input('emission-dropdown', 'value') 
 )
 
+
 def update_environmental_charts(selected_effect):
     env_df = df2[['Entity'] + env_columns].dropna()
     fig = px.bar(
-        env_df.sort_values(by=selected_effect, ascending=False).round(2).head(20),
-        x='Entity',
-        y=selected_effect,
+        env_df.sort_values(by=selected_effect, ascending=False).round(2).head(15),
+        x=selected_effect,
+        y='Entity',
         color='Entity',
-        title=f"Top 20 Foods by {selected_effect}",
+        color_discrete_map=color_map_categories, 		
+        title=f"Top 15 Foods by {selected_effect} Carbon emissions (in CO₂ equivalent grams) per 100 gram of product",
         template='plotly_white'  
     )
     fig.update_layout(
-	    xaxis_tickangle=-45, 
+        height=600,
         xaxis_title=None,
         yaxis_title=None)
     return fig
+	
+@app.callback(
+    [Output('total-impact-output', 'children'),
+     Output('sustainability-tip', 'children')],
+    Input('effect-plot', 'clickData')
+)
+def show_total_impact_with_tip(clickData):
+    if clickData:
+        food_clicked = clickData['points'][0]['y']
+        row = df2[df2['Entity'] == food_clicked]
+        numeric_columns = row.iloc[:, 1:].select_dtypes(include='number')
+        if not numeric_columns.empty:
+            total = numeric_columns.sum(axis=1).values[0]
+        else:
+            total = 0
+
+        tip = ""
+        if total > carbon_threshold:
+            tip = f"💡 Consider reducing {food_clicked} or swapping it with a more sustainable alternative."
+
+        return (
+            f"Total environmental impact for {food_clicked}: {total:.2f} grams",
+            tip
+        )
+    else:
+        return "", ""
+
+    
 
 @app.callback(
     Output('meal-storage', 'data'),
@@ -248,6 +306,8 @@ def update_environmental_charts(selected_effect):
     State('meal-storage', 'data'),
     prevent_initial_call=True
 )
+
+
 def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, selected_food, quantity, current_data):
     triggered_id = ctx.triggered_id
     current_data = current_data or []
@@ -288,22 +348,27 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
             "protein (g)": round(protein, 2),
             "Delete": '[🗑️](#)'
         })
-
+		
         # Check for sustainable alternatives again after replacing
         if row['CO2/100g'] > carbon_threshold:
             alternatives = find_alternatives(row, df_clean)
             if not alternatives.empty:
-                recommendation_div = html.Div([  # Provide alternatives as buttons
-                    html.P("🌍 This item has high CO₂ emissions. Consider these alternatives:"),
-                    html.Div([
+                buttons = []
+                for _, alt in alternatives.head(3).iterrows():
+                    co2 = round(alt['CO2/100g'], 2)
+                    protein = round(alt['protein (g)'], 2)
+                    label = f"{alt['FOODNAME']} (CO₂: {co2:.2f}g, Protein: {protein:.2f}g)"
+                    buttons.append(
                         html.Button(
-                            f"{alt['FOODNAME']} (CO₂: {alt['CO2/100g']}g, Protein: {alt['protein (g)']}g)",
+                            label,
                             id={'type': 'alt-button', 'index': alt['FOODNAME']},
                             n_clicks=0,
                             style={'margin': '3px'}
                         )
-                        for _, alt in alternatives.head(3).iterrows()
-                    ])
+                    )
+                recommendation_div = html.Div([
+                    html.P("🌍 This item has high CO₂ emissions. Consider these alternatives:"),
+                    html.Div(buttons)
                 ])
             else:
                 recommendation_div = html.P("🌍 This item has high CO₂ emissions, but no good alternative was found.")
@@ -329,7 +394,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
         })
 
         # Check for sustainable alternatives
-        if row['CO2/100g'] > 2.5:
+        if row['CO2/100g'] > carbon_threshold:
             alternatives = find_alternatives(row, df_clean)
             if not alternatives.empty:
                 recommendation_div = html.Div([  # Provide alternatives as buttons
@@ -351,7 +416,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
 
     # 4. Update dropdown options based on category
     if selected_recs is not None:
-        filtered_df = df_clean[df_clean['recs'] == selected_recs]
+        filtered_df = df_clean[df_clean['Categories'] == selected_recs]
         dropdown_options = [{'label': food, 'value': food} for food in sorted(filtered_df['FOODNAME'].unique())]
     else:
         dropdown_options = []
@@ -373,8 +438,8 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
     df_meal = pd.DataFrame(current_data)
     if not df_meal.empty:
         df_meal_grouped = df_meal.groupby(['Food'], as_index=False).first()
-        df_meal_grouped['recs'] = df_meal_grouped['Food'].map(df_clean.set_index('FOODNAME')['recs'].to_dict())
-        fig = px.sunburst(df_meal_grouped, path=['recs', 'Food'], values='Quantity', color='recs')
+        df_meal_grouped['Categories'] = df_meal_grouped['Food'].map(df_clean.set_index('FOODNAME')['Categories'].to_dict())
+        fig = px.sunburst(df_meal_grouped, path=['Categories', 'Food'], values='Quantity', color='Categories', color_discrete_map=color_map_categories)
     else:
         fig = px.pie(names=['None'], values=[1], title='Meal Composition')
 
@@ -397,7 +462,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
     Input('vitamin-dropdown', 'value')
 )
 def top_vitamin_plot(vitamin):
-    df_vit = df_clean[['FOODNAME', vitamin, 'FOODCLASS', 'CO2/100g', 'energy (kJ)']].dropna()
+    df_vit = df_clean[['FOODNAME', vitamin, 'Categories', 'CO2/100g', 'energy (kJ)']].dropna()
     df_vit = df_vit.sort_values(by=vitamin, ascending=False).head(15)
     df_vit['Calories (kcal)'] = (df_vit['energy (kJ)'] / 4.184).round(1)
     food_order = df_vit['FOODNAME'].tolist()
@@ -406,9 +471,10 @@ def top_vitamin_plot(vitamin):
 
     fig = px.bar(
         df_vit,
-        x='FOODNAME',
-        y=vitamin,
-        color='FOODCLASS',
+        x=vitamin,
+        y='FOODNAME',
+        color='Categories',
+        color_discrete_map=color_map_categories, 
         category_orders={'FOODNAME': food_order}
     )
 
@@ -427,15 +493,15 @@ def top_vitamin_plot(vitamin):
     fig.update_layout(
         title_text=f"Top 15 Foods Rich in {vitamin} (Recommended daily level: {rdl})",
         title_x=0.5,
+        height=600,
         showlegend=True,
         xaxis_title=None,
         yaxis_title=None,
-        xaxis_tickangle=-45,
+        #xaxis_tickangle=-45,
         margin=dict(t=100, b=120)
     )
 
     return fig
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8080)
-
+    app.run(debug=True)
