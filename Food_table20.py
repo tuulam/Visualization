@@ -255,7 +255,8 @@ def update_environmental_charts(selected_effect):
     fig.update_layout(
         height=600,
         xaxis_title=None,
-        yaxis_title=None)
+        yaxis_title=None,
+	showlegend=False)
     return fig
 	
 @app.callback(
