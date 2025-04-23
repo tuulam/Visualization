@@ -100,8 +100,8 @@ app.layout = html.Div([
             html.Div(id='food-details'),
         ]),
 		
-	    dcc.Tab(label='Environmental Effects', children=[
-            html.H1("Environmental Impact of Foods  in the Food Supply Chain", style={'fontWeight': 'bold', 'color': 'red'}),
+	    dcc.Tab(label='Food Supply Chain Emissions', children=[
+            html.H1("Environmental Impact of Foods in the Different Stages of the Food Supply Chain", style={'fontWeight': 'bold', 'color': 'red'}),
             html.Label("Select a Stage of the Food Supply Chain:"),
             dcc.Dropdown(
                 id='emission-dropdown',
