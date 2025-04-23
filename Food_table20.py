@@ -1,9 +1,10 @@
 import pandas as pd
 import dash
-from dash import dcc, html, Input, Output, State, ctx, dash_table
+from dash import dcc, html, Input, Output, State, ctx, dash_table, callback_context
 import plotly.express as px
 from dash import MATCH, ALL
 import plotly.colors as pc
+import plotly.express as px
 
 
 # Load and clean your data
@@ -11,6 +12,19 @@ df = pd.read_excel('sorted4.xlsx')
 df2 = pd.read_excel("environ_grams.xlsx")
 
 carbon_threshold = 50
+   
+
+vitamin_rdi_dict = {
+    "vitamin C, mg": 90,      # mg
+    "vitamin A, µg": 900,     # µg
+    "vitamin B12, µg": 2.4,   # µg
+	"thiamin, mg": 1.2,		  # mg
+	"vitamin B12": 2.4,   # µg
+	"vitamin D, µg": 20,      # µg
+    "vitamin E, µg": 4,		  # µg
+	"vitamin K, µg": 120,	  # µg
+	"carotenoids, mg": 2	  # mg
+}
 
 env_columns = ['Food emissions of land use',
        'Food emissions of farms', 'Food emissions of animal feed',
@@ -18,22 +32,6 @@ env_columns = ['Food emissions of land use',
        'Food emissions of retail', 'Food emissions of packaging',
        'Food emissions of losses']
 	   
-# Recommended Daily Levels (example values, adjust as needed)
-recommended_daily_levels = {
-    'vitamin C, mg': '90 mg',
-    'vitamin A, µg': '900 µg',
-    'vitamin D, µg': '20 µg',
-	'vitamin E, µg': '4 µg',
-	'vitamin K, µg': '120 µg',
-    'vitamin B12, µg': '2.4 µg',
-	'thiamin, mg': '1.2 mg',
-    'folate, µg': '400 µg',
-    'iron, mg': '18 mg',
-	'carotenoids, mg': '2 mg',
-    'calcium, mg': '1300 mg',
-    'magnesium, mg': '420 mg'
-}
-
 
 # Fix all numeric columns that may contain commas instead of dots
 exclude = ['id', 'FOODNAME', 'FOODCLASS', 'recs', 'Categories']
@@ -103,8 +101,8 @@ app.layout = html.Div([
         ]),
 		
 	    dcc.Tab(label='Environmental Effects', children=[
-            html.H1("Environmental Impact of Foods", style={'fontWeight': 'bold', 'color': 'red'}),
-            html.Label("Select an Environmental Effect:"),
+            html.H1("Environmental Impact of Foods  in the Food Supply Chain", style={'fontWeight': 'bold', 'color': 'red'}),
+            html.Label("Select a Stage of the Food Supply Chain:"),
             dcc.Dropdown(
                 id='emission-dropdown',
                 options=[{'label': v, 'value': v} for v in env_columns],
@@ -112,7 +110,7 @@ app.layout = html.Div([
             ),
             dcc.Graph(id='effect-plot'),
 			
-            html.Div(id='total-impact-output', style={"marginTop": "20px", "fontWeight": "bold"}),
+            html.Div(id='total-impact-output', style={"marginTop": "20px", "fontWeight": "bold", "fontSize": "24px" }),
 			
             html.Div(id='sustainability-tip', style={"marginTop": "10px", "color": "green", "fontStyle": "italic"})			
         ]),
@@ -120,15 +118,18 @@ app.layout = html.Div([
         
         dcc.Tab(label='Meal Planner', children=[
             html.H1("Meal Planner", style={'fontWeight': 'bold', 'color': 'green'}),
-			
-			html.Div([
-			    html.H1("Nutrition recommendations and food-based dietary guidelines by Finnish Food Authority", style={'fontWeight': 'bold', 'color': 'green'}),
-                html.P("It is recommended to eat at least 500 g of vegetables, fruit, berries, and mushrooms. Of this amount, half should consist of berries and fruit, and the rest vegetables.It is recommended to consume at least 500 grams of vegetables, fruits, berries, and mushrooms daily. Half of this amount should come from berries and fruits, and the other half from vegetables."),
-                html.P("Fish should be eaten two to three times per week, with a variety of species included in rotation. The total weekly intake of red meat and meat products should not exceed 500 grams. A typical cooked portion of fish or meat weighs approximately 100 to 150 grams."),
-				html.P("A daily intake of 30 grams of nuts and seeds is recommended. Legumes should be consumed in amounts of 50 to 100 grams per day."),
-				html.P("The recommended daily intake of cereal products—such as cooked whole grain pasta, barley, rice, or whole grain bread—is approximately 600 ml for women and 900 ml for men. At least half of this should come from whole grain sources."),
-				html.P("For environmental reasons, it is not recommended to increase current levels of poultry consumption. Including up to one egg per day can be part of a health-promoting diet.")
-            ], style={"padding": "10px","backgroundColor": "#f9f9f9","border": "1px solid #ccc","borderRadius": "10px","marginBottom": "20px"}),
+            html.Div([
+                html.H2("Nutrition recommendations and food-based dietary guidelines by Finnish Food Authority", style={'fontWeight': 'bold', 'color': 'green'}),
+                html.P([
+                    "It is recommended to eat at least 500 g of vegetables, fruit, berries, and mushrooms. Of this amount, half should consist of berries and fruit, and the rest vegetables.", html.Br(),
+                    "Fish should be eaten two to three times per week, with a variety of species included in rotation.", html.Br(), 
+				    "The total weekly intake of red meat and meat products should not exceed 500 grams. A typical cooked portion of fish or meat weighs approximately 100 to 150 grams.", html.Br(),
+                    "Legumes should be consumed in amounts of 50 to 100 grams per day.", html.Br(),
+				    "A daily intake of 30 grams of nuts and seeds is recommended.", html.Br(),
+                    "The recommended daily intake of cereal products—such as cooked whole grain pasta, barley, rice, or whole grain bread—is approximately 600 ml for women and 900 ml for men. At least half of this should come from whole grain sources.", html.Br(),
+                    "For environmental reasons, it is not recommended to increase current levels of poultry consumption. Including up to one egg per day can be part of a health-promoting diet."
+                    ], style={"padding": "10px","backgroundColor": "#f9f9f9","border": "1px solid #ccc","borderRadius": "10px","marginBottom": "20px"}),
+				]),
 
 
             html.Label("Select Food Category (Categories):"),
@@ -174,7 +175,7 @@ app.layout = html.Div([
 
             
         ]),
-
+		
         dcc.Tab(label='Top Vitamin Sources', children=[
             html.H1("Top 15 Foods Rich in Selected Vitamin", style={'fontWeight': 'bold', 'color': 'green'}),
             html.Label("Select a Vitamin:"),
@@ -183,7 +184,8 @@ app.layout = html.Div([
                 options=[{'label': v, 'value': v} for v in vitamin_columns],
                 value=vitamin_columns[0]
             ),
-            dcc.Graph(id='top-vitamin-plot')
+            dcc.Graph(id='top-vitamin-plot'),
+            html.Div(id='food-recommendation-output', style={'marginTop': '20px', 'fontSize': '18px'})
         ])
 
     ])
@@ -256,7 +258,7 @@ def update_environmental_charts(selected_effect):
         height=600,
         xaxis_title=None,
         yaxis_title=None,
-	showlegend=False)
+		showlegend=False)  # This hides the legend
     return fig
 	
 @app.callback(
@@ -457,52 +459,111 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
     )
 
 
-
 @app.callback(
-    Output('top-vitamin-plot', 'figure'),
-    Input('vitamin-dropdown', 'value')
+    [Output('top-vitamin-plot', 'figure'),
+     Output('food-recommendation-output', 'children')],
+    [Input('vitamin-dropdown', 'value'),
+     Input('top-vitamin-plot', 'clickData')]
 )
-def top_vitamin_plot(vitamin):
+
+
+def make_vitamin_plot(vitamin, clickData=None):
+    # Ensure that the vitamin is in the dataframe
     df_vit = df_clean[['FOODNAME', vitamin, 'Categories', 'CO2/100g', 'energy (kJ)']].dropna()
     df_vit = df_vit.sort_values(by=vitamin, ascending=False).head(15)
     df_vit['Calories (kcal)'] = (df_vit['energy (kJ)'] / 4.184).round(1)
     food_order = df_vit['FOODNAME'].tolist()
 
-    rdl = recommended_daily_levels.get(vitamin, 'N/A')
+    # Get the recommended daily level (RDI) for the selected vitamin
+    rdl = vitamin_rdi_dict.get(vitamin, 'N/A')
 
+    # Create a bar plot with Plotly Express (bars will be horizontal)
     fig = px.bar(
         df_vit,
-        x=vitamin,
+        x=vitamin,  # This will be on the x-axis (vitamin content)
         y='FOODNAME',
         color='Categories',
         color_discrete_map=color_map_categories, 
-        category_orders={'FOODNAME': food_order}
+        category_orders={'FOODNAME': food_order},
+        orientation='h',  # Horizontal bars
+        hover_data={'FOODNAME': True, vitamin: True, 'CO2/100g': True, 'Calories (kcal)': True},  # Adding hover data
+		custom_data=['FOODNAME', 'CO2/100g', 'Calories (kcal)']  # <-- ADD THIS LINE
     )
 
-    fig.update_traces(
-        text=None,
-        customdata=df_vit[['CO2/100g', 'Calories (kcal)']].values,
-        hovertemplate=(
-            "<b>%{x}</b><br>" +
-            "{}: %{{y}}<br>".format(vitamin) +
-            "CO₂: %{customdata[0]:.2f} g<br>" +
-			"Calories: %{customdata[1]:.1f } kCal<br>" +
-            "<extra></extra>"
-        )
-    )
-
+    # Update layout to add a title and adjust axis labels
     fig.update_layout(
         title_text=f"Top 15 Foods Rich in {vitamin} (Recommended daily level: {rdl})",
         title_x=0.5,
         height=600,
         showlegend=True,
-        xaxis_title=None,
-        yaxis_title=None,
-        #xaxis_tickangle=-45,
-        margin=dict(t=100, b=120)
+        xaxis_title=f"{vitamin} per 100g",  # Add a title to the x-axis (vitamin)
+        yaxis_title="Food",
+        margin=dict(t=100, b=120),
     )
 
-    return fig
+    # Initialize recommendation text if clickData is present
+    recommendation_text = "Click on a food bar to see details."  # Default text if no clickData
+
+    if clickData and 'points' in clickData and clickData['points']:
+        food_name = clickData['points'][0].get('customdata', [None])[0]
+        co2_per_100g = clickData['points'][0].get('customdata', [None, None])[1]
+        calories_per_100g = clickData['points'][0].get('customdata', [None, None, None])[2]
+        
+        # Find RDI for the selected vitamin
+        rdi = vitamin_rdi_dict.get(vitamin, 0)  # vitamin_rdi_dict
+
+        if food_name and rdi != 0:
+            # Calculate grams needed, calories, and CO₂
+            grams_needed = (rdi / clickData['points'][0]['x']) * 100
+            total_calories = (calories_per_100g * grams_needed / 100)
+            total_co2 = (co2_per_100g * grams_needed / 100)
+
+            recommendation_text = html.Div([
+                html.H4(f"{food_name}", style={'color': 'green'}),
+                html.P(f"To reach the RDI of {vitamin} ({rdi}), you'd need to eat about {grams_needed:.1f}g of {food_name}."),
+                html.P(f"This amount provides about {total_calories:.1f} kcal and emits {total_co2:.2f} g CO₂."),
+            ])
+        elif clickData:
+            recommendation_text = f"No RDI data available for {vitamin} or missing food data."
+    else:
+        recommendation_text = "Click on a food bar to see details."
+
+    return fig, recommendation_text
+
+
+
+	
+def update_vitamin_tab(selected_vitamin, clickData):
+    # Update the plot based on the selected vitamin
+    fig = make_vitamin_plot(selected_vitamin, clickData)
+
+    # Determine food recommendation based on click
+    if clickData:
+        food_name = clickData['points'][0]['customdata'][0]
+        co2_per_100g = clickData['points'][0]['customdata'][1]
+        calories_per_100g = clickData['points'][0]['customdata'][2]
+        
+        # Find RDI for the selected vitamin (adjust as per your data)
+        rdi = vitamin_rdi_dict.get(selected_vitamin, 0)
+
+        # Calculate grams needed, calories, and CO₂
+        if rdi == 0:
+            recommendation_text = f"No RDI data available for {selected_vitamin}."
+        else:
+            grams_needed = (rdi / clickData['points'][0]['x']) * 100
+            total_calories = (calories_per_100g * grams_needed / 100)
+            total_co2 = (co2_per_100g * grams_needed / 100)
+
+            recommendation_text = html.Div([
+                html.H4(f"{food_name}", style={'color': 'green'}),
+                html.P(f"To reach the RDI of {selected_vitamin} ({rdi}), you'd need to eat about {grams_needed:.1f}g of {food_name}."),
+                html.P(f"This amount provides about {total_calories:.1f} kcal and emits {total_co2:.2f} g CO₂."),
+            ])
+    else:
+        recommendation_text = "Click on a food bar to see details."
+
+    return fig, recommendation_text
+
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8080)
