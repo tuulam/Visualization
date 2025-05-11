@@ -443,31 +443,31 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
             "CO2": round(co2, 0),
             "protein (g)": round(protein, 0),
             "Delete": '[🗑️](#)'
-        })
+	})
 
-        # Check for sustainable alternatives
+	# Check for sustainable alternatives
 	if row['CO2/100g'] > carbon_threshold:
-	    alternatives = find_alternative_foods(row['FOODNAME'], df_clean)
-	    if alternatives:
-	        buttons = []
-	        for alt in alternatives[:3]:
-	            co2 = round(alt['CO2/100g'], 0)
-	            protein = round(alt['protein (g)'], 0)
-	            label = f"{alt['FOODNAME']} (CO₂: {co2}g, Protein: {protein}g)"
+		alternatives = find_alternative_foods(row['FOODNAME'], df_clean)
+		if alternatives:
+	        	buttons = []
+	        	for alt in alternatives[:3]:
+	            		co2 = round(alt['CO2/100g'], 0)
+	            		protein = round(alt['protein (g)'], 0)
+	            		label = f"{alt['FOODNAME']} (CO₂: {co2}g, Protein: {protein}g)"
 	
-	            amount = row.get('quantity', 100)
-	            buttons.append(
-	                html.Button(
-	                    label,
-	                    id={
-	                        'type': 'alt-button',
-	                        'index': alt['FOODNAME'],
-	                        'amount': amount  # Custom key
-	                    },
-	                    n_clicks=0,
-	                    style={'margin': '3px'}
-	                )
-	            )
+	            		amount = row.get('quantity', 100)
+	        		buttons.append(
+	                	html.Button(
+	                    		label,
+	                    		id={
+	                        		'type': 'alt-button',
+	                        		'index': alt['FOODNAME'],
+	                        		'amount': amount  # Custom key
+	                    		},
+	                    		n_clicks=0,
+	                    		style={'margin': '3px'}
+	                	)
+	            	)
 
                 # tähän asti
                 recommendation_div = html.Div([
