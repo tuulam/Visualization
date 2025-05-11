@@ -446,25 +446,29 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
         })
 
         # Check for sustainable alternatives
-        if row['CO2/100g'] > carbon_threshold:
-            alternatives = find_alternative_foods(row['FOODNAME'], df_clean)
-            if alternatives: 
-                buttons = []
-                for alt in alternatives[:3]:
-                    label = f"{alt['FOODNAME']} (CO₂: {round(alt['CO2/100g'], 0)}g, Protein: {round(alt['protein (g)'], 0)}g)"
-                    co2 = round(alt['CO2/100g'], 0)
-                    protein = round(alt['protein (g)'], 0)
-                    #label = f"{alt['FOODNAME']} (CO₂: {co2:.0f}g, Protein: {protein:.0f}g)"
-                    if 'amount' not in row or pd.isna(row['amount']):
-                        row['amount'] = 100
-                    buttons.append(
-                        html.Button(
-                            label,
-                            id={'type': 'alt-button', 'index': alt['FOODNAME'], 'amount': row.get('quantity', 100)},
-                            n_clicks=0,
-                            style={'margin': '3px'}
-                        )
-                    )
+	if row['CO2/100g'] > carbon_threshold:
+	    alternatives = find_alternative_foods(row['FOODNAME'], df_clean)
+	    if alternatives:
+	        buttons = []
+	        for alt in alternatives[:3]:
+	            co2 = round(alt['CO2/100g'], 0)
+	            protein = round(alt['protein (g)'], 0)
+	            label = f"{alt['FOODNAME']} (CO₂: {co2}g, Protein: {protein}g)"
+	
+	            amount = row.get('quantity', 100)
+	            buttons.append(
+	                html.Button(
+	                    label,
+	                    id={
+	                        'type': 'alt-button',
+	                        'index': alt['FOODNAME'],
+	                        'amount': amount  # Custom key
+	                    },
+	                    n_clicks=0,
+	                    style={'margin': '3px'}
+	                )
+	            )
+
                 # tähän asti
                 recommendation_div = html.Div([
                     html.P("🌍 This item has high CO₂ emissions. Consider these alternatives:")
