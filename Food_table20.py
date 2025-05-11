@@ -454,7 +454,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
                     label = f"{alt['FOODNAME']} (CO₂: {round(alt['CO2/100g'], 0)}g, Protein: {round(alt['protein (g)'], 0)}g)"
                     co2 = round(alt['CO2/100g'], 0)
                     protein = round(alt['protein (g)'], 0)
-                    label = f"{alt['FOODNAME']} (CO₂: {co2:.0f}g, Protein: {protein:.0f}g)"
+                    #label = f"{alt['FOODNAME']} (CO₂: {co2:.0f}g, Protein: {protein:.0f}g)"
                     if 'amount' not in row or pd.isna(row['amount']):
                         row['amount'] = 100
                     buttons.append(
