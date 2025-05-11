@@ -20,7 +20,7 @@ vitamin_rdi_dict = {
     "vitamin A, µg": 900,     # µg
     "vitamin B12, µg": 2.4,   # µg
 	"thiamin, mg": 1.2,		  # mg
-	"vitamin B12": 2.4,       # µg
+	"vitamin B12": 2.4,   # µg
 	"vitamin D, µg": 20,      # µg
     "vitamin E, µg": 4,		  # µg
 	"vitamin K, µg": 120,	  # µg
@@ -167,7 +167,6 @@ def tab_3_content():
         ),
 
         dcc.Store(id='meal-storage', data=[]),
-        dcc.Store(id='df-clean-store', data=df_clean.to_dict('records')),
         html.Div(id='totals-output'),
         dcc.Graph(id="meal-pie-chart")
     ])
@@ -340,17 +339,15 @@ def show_total_impact_with_tip(clickData):
     State('meal-food-dropdown', 'value'),
     State('food-quantity', 'value'),
     State('meal-storage', 'data'),
-    State('df-clean-store', 'data'),
-    State({'type': 'alt-button', 'index': ALL}, 'id'),
     prevent_initial_call=True
 )
-def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, selected_food, quantity, current_data, df_clean, alt_ids):
-    df_clean = pd.DataFrame(df_clean)
+
+
+def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, selected_food, quantity, current_data):
     triggered_id = ctx.triggered_id
     current_data = current_data or []
     recommendation_div = html.Div()
     set_value = None
-
 
     # 1. Handle deletion (if clicking the delete button)
     if triggered_id == 'meal-table' and active_cell and active_cell.get('column_id') == 'Delete':
@@ -360,11 +357,10 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
         recommendation_div = html.Div()
 
     # 2. Handle clicking an alternative button (replace food)
-
-    triggered = ctx.triggered_id
-    if isinstance(triggered, dict) and triggered.get('type') == 'alt-button':
-        selected_food = triggered['index']
-        quantity = triggered.get('amount', 100)  # Oletusarvo jos ei löydy
+    elif isinstance(triggered_id, dict) and triggered_id.get('type') == 'alt-button':
+        # Find the index of the original food item in the table
+        selected_food = triggered_id['index']  # the alternative food selected
+        quantity = 100  # default quantity (you can make this dynamic if needed)
 
         # Find the original food entry in the meal storage and remove it
         food_idx = next((i for i, item in enumerate(current_data) if item['Food'] == selected_food), None)
@@ -377,7 +373,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
         calories = row['energy (kCal)'] * quantity / 100
         co2 = row['CO2/100g'] * quantity / 100
         protein = round(row['protein (g)'] * quantity / 100, 0)
-	
+
         current_data.append({
             "Food": selected_food,
             "Quantity": quantity,
@@ -389,20 +385,15 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
         })
 		
         # Check for sustainable alternatives again after replacing
-
         if row['CO2/100g'] > carbon_threshold:
             alternatives = find_alternative_foods(row['FOODNAME'], df_clean)
-
-
-            if alternatives:
+            alternatives_df = pd.DataFrame(alternatives)
+            if not alternatives_df.empty:
                 buttons = []
-                for alt in alternatives[:3]:
+                for _, alt in alternatives_df.head(3).iterrows():
                     co2 = round(alt['CO2/100g'], 0)
                     protein = round(alt['protein (g)'], 0)
-                    label = f"{alt['FOODNAME']} (CO₂: {co2}g, Protein: {protein}g)"
-
-                    #quantity = row.get('quantity', 100)
-
+                    label = f"{alt['FOODNAME']} (CO₂: {co2:,.0f}g, Protein: {protein:,.0f}g)"
                     buttons.append(
                         html.Button(
                             label,
@@ -411,28 +402,21 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
                             style={'margin': '3px'}
                         )
                     )
-
                 recommendation_div = html.Div([
                     html.P("🌍 This item has high CO₂ emissions. Consider these alternatives:"),
-                    *buttons  # puretaan nappilista suoraan komponentiksi
+                    html.Div(buttons)
                 ])
             else:
                 recommendation_div = html.P("🌍 This item has high CO₂ emissions, but no good alternative was found.")
         else:
             recommendation_div = html.Div()
 
-
-
-	# 3. Handle add-button click
+    # 3. Handle add button to add food to table
     elif triggered_id == 'add-button' and selected_food and quantity:
         row = df_clean[df_clean['FOODNAME'] == selected_food].iloc[0]
-        #if 'amount' not in row or pd.isna(row['amount']):
-            #row['amount'] = 100
-        print("add:", quantity)
-
         energy = row['energy (kJ)'] * quantity / 100
         calories = row['energy (kCal)'] * quantity / 100
-        co2 = round(row['CO2/100g'] * quantity / 100, 0)
+        co2 = row['CO2/100g'] * quantity / 100
         protein = round(row['protein (g)'] * quantity / 100, 0)
 
         current_data.append({
@@ -448,38 +432,27 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
         # Check for sustainable alternatives
         if row['CO2/100g'] > carbon_threshold:
             alternatives = find_alternative_foods(row['FOODNAME'], df_clean)
-            if alternatives:
+            alternatives_df = pd.DataFrame(alternatives)
+
+            if not alternatives_df.empty:
                 buttons = []
-                for alt in alternatives[:3]:
+                for _, alt in alternatives_df.head(3).iterrows():
                     co2 = round(alt['CO2/100g'], 0)
                     protein = round(alt['protein (g)'], 0)
-                    label = f"{alt['FOODNAME']} (CO₂: {co2}g, Protein: {protein}g)"
-
-                    amount = row.get('quantity', 100)
+                    label = f"{alt['FOODNAME']} (CO₂: {co2:.0f}g, Protein: {protein:.0f}g)"
                     buttons.append(
                         html.Button(
                             label,
-                            id={
-                                'type': 'alt-button',
-                                'index': alt['FOODNAME']
-                            },
+                            id={'type': 'alt-button', 'index': alt['FOODNAME']},
                             n_clicks=0,
                             style={'margin': '3px'}
                         )
                     )
-              # tähän asti
+
                 recommendation_div = html.Div([
-                    html.P("🌍 This item has high CO₂ emissions. Consider these alternatives:")
-                ] + [
-                    html.Button(
-                        f"{alt['FOODNAME']} (CO₂: {alt['CO2/100g']}g, Protein: {alt['protein (g)']}g)",
-                        id={'type': 'alt-button', 'index': alt['FOODNAME']},
-                        n_clicks=0,
-                        style={'margin': '3px'}
-                    )
-                    for alt in alternatives[:3]
-                    ]
-                )
+                    html.P("🌍 This item has high CO₂ emissions. Consider these alternatives:"),
+                    html.Div(buttons)
+                ])
             else:
                 recommendation_div = html.P("🌍 This item has high CO₂ emissions, but no good alternative was found.")
         else:
@@ -497,7 +470,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
     total_calories = round(sum(item['Calories'] for item in current_data), 0)
     total_co2 = round(sum(item['CO2'] for item in current_data), 0)
     total_protein = round(sum(item['protein (g)'] for item in current_data), 0)
-    totals_div = html.Div([ 
+    totals_div = html.Div([
         html.H4("Total for Meal"),
         html.P(f"Total Energy: {total_energy:,.0f} kJ"),
         html.P(f"Total Calories: {total_calories:,.0f} kCal"),
@@ -525,8 +498,6 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
         None,  # reset quantity
         dropdown_options
     )
-
-
 def find_alternative_foods(selected_food, df, protein_tolerance=0.1):
     original_row = df[df['FOODNAME'] == selected_food]
     if original_row.empty:
@@ -534,12 +505,21 @@ def find_alternative_foods(selected_food, df, protein_tolerance=0.1):
 
     original = original_row.iloc[0]
     category = original['Categories']
-    original_protein = original['protein (g)']
-    original_co2 = original['CO2/100g']
+
+    # Force numeric, handle NaN
+    original_protein = pd.to_numeric(original['protein (g)'], errors='coerce')
+    original_co2 = pd.to_numeric(original['CO2/100g'], errors='coerce')
+
+    if pd.isna(original_protein) or pd.isna(original_co2):
+        return []
 
     # Define acceptable protein range
     lower = original_protein * (1 - protein_tolerance)
     upper = original_protein * (1 + protein_tolerance)
+
+    # Ensure comparison columns are numeric
+    df['protein (g)'] = pd.to_numeric(df['protein (g)'], errors='coerce')
+    df['CO2/100g'] = pd.to_numeric(df['CO2/100g'], errors='coerce')
 
     # 1. Try to find alternatives in the same category
     same_cat = df[
@@ -551,22 +531,11 @@ def find_alternative_foods(selected_food, df, protein_tolerance=0.1):
     ]
 
     if not same_cat.empty:
-        return same_cat.sort_values(by='CO2/100g')[['FOODNAME', 'protein (g)', 'energy (kCal)', 'CO2/100g']].to_dict('records')
+        return same_cat.sort_values(by='CO2/100g')[
+            ['FOODNAME', 'protein (g)', 'energy (kCal)', 'CO2/100g']
+        ].to_dict('records')
 
-    # 2. If none found, search across other categories
-    other_cat = df[
-        (df['Categories'] != category) &
-        (df['protein (g)'] >= lower) &
-        (df['protein (g)'] <= upper) &
-        (df['CO2/100g'] < original_co2)
-    ]
-
-    if not other_cat.empty:
-        return other_cat.sort_values(by='CO2/100g')[['FOODNAME', 'protein (g)', 'energy (kCal)', 'CO2/100g']].to_dict('records')
-
-    # 3. Still no matches – return empty list
     return []
-
 
 
 @app.callback(
