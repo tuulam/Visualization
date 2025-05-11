@@ -19,7 +19,7 @@ vitamin_rdi_dict = {
     "vitamin C, mg": 90,      # mg
     "vitamin A, µg": 900,     # µg
     "vitamin B12, µg": 2.4,   # µg
-	"thiamin, mg": 1.2,   # mg
+	"thiamin, mg": 1.2,		  # mg
 	"vitamin B12": 2.4,       # µg
 	"vitamin D, µg": 20,      # µg
     "vitamin E, µg": 4,		  # µg
@@ -375,7 +375,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
         row = df_clean[df_clean['FOODNAME'] == selected_food].iloc[0]
         energy = row['energy (kJ)'] * quantity / 100
         calories = row['energy (kCal)'] * quantity / 100
-        co2 = round(row['CO2/100g'] * quantity / 100, 0)
+        co2 = row['CO2/100g'] * quantity / 100
         protein = round(row['protein (g)'] * quantity / 100, 0)
 	
         current_data.append({
@@ -443,33 +443,32 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
             "CO2": round(co2, 0),
             "protein (g)": round(protein, 0),
             "Delete": '[🗑️](#)'
-	})
+        })
 
-	# Check for sustainable alternatives
-	if row['CO2/100g'] > carbon_threshold:
-		alternatives = find_alternative_foods(row['FOODNAME'], df_clean)
-		if alternatives:
-	        	buttons = []
-	        	for alt in alternatives[:3]:
-	            		co2 = round(alt['CO2/100g'], 0)
-	            		protein = round(alt['protein (g)'], 0)
-	            		label = f"{alt['FOODNAME']} (CO₂: {co2}g, Protein: {protein}g)"
-	
-	            		amount = row.get('quantity', 100)
-	        		buttons.append(
-	                	html.Button(
-	                    		label,
-	                    		id={
-	                        		'type': 'alt-button',
-	                        		'index': alt['FOODNAME'],
-	                        		'amount': amount  # Custom key
-	                    		},
-	                    		n_clicks=0,
-	                    		style={'margin': '3px'}
-	                	)
-	            	)
+        # Check for sustainable alternatives
+        if row['CO2/100g'] > carbon_threshold:
+            alternatives = find_alternative_foods(row['FOODNAME'], df_clean)
+            if alternatives:
+                buttons = []
+                for alt in alternatives[:3]:
+                    co2 = round(alt['CO2/100g'], 0)
+                    protein = round(alt['protein (g)'], 0)
+                    label = f"{alt['FOODNAME']} (CO₂: {co2}g, Protein: {protein}g)"
 
-                # tähän asti
+                    amount = row.get('quantity', 100)
+                    buttons.append(
+                        html.Button(
+                            label,
+                            id={
+                                'type': 'alt-button',
+                                'index': alt['FOODNAME'],
+                                'amount': amount  # Custom key
+                            },
+                            n_clicks=0,
+                            style={'margin': '3px'}
+                        )
+                    )
+              # tähän asti
                 recommendation_div = html.Div([
                     html.P("🌍 This item has high CO₂ emissions. Consider these alternatives:")
                 ] + [
@@ -675,6 +674,7 @@ def update_vitamin_tab(selected_vitamin, clickData):
         recommendation_text = "Click on a food bar to see details."
 
     return fig, recommendation_text
+
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8080)
