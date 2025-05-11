@@ -432,7 +432,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
 
         energy = row['energy (kJ)'] * quantity / 100
         calories = row['energy (kCal)'] * quantity / 100
-        co2 = row['CO2/100g'] * quantity / 100
+        co2 = round(row['CO2/100g'] * quantity / 100, 0)
         protein = round(row['protein (g)'] * quantity / 100, 0)
 
         current_data.append({
