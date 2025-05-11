@@ -406,7 +406,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
                     buttons.append(
                         html.Button(
                             label,
-                            id={'type': 'alt-button', 'index': alt['FOODNAME'], 'amount': quantity},
+                            id={'type': 'alt-button', 'index': alt['FOODNAME']},
                             n_clicks=0,
                             style={'margin': '3px'}
                         )
@@ -461,8 +461,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
                             label,
                             id={
                                 'type': 'alt-button',
-                                'index': alt['FOODNAME'],
-                                'amount': amount  # Custom key
+                                'index': alt['FOODNAME']
                             },
                             n_clicks=0,
                             style={'margin': '3px'}
@@ -474,7 +473,7 @@ def unified_meal_callback(n_clicks_add, active_cell, alt_clicks, selected_recs, 
                 ] + [
                     html.Button(
                         f"{alt['FOODNAME']} (CO₂: {alt['CO2/100g']}g, Protein: {alt['protein (g)']}g)",
-                        id={'type': 'alt-button', 'index': alt['FOODNAME'], 'amount': quantity},
+                        id={'type': 'alt-button', 'index': alt['FOODNAME']},
                         n_clicks=0,
                         style={'margin': '3px'}
                     )
