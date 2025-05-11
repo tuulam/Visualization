@@ -19,7 +19,7 @@ vitamin_rdi_dict = {
     "vitamin C, mg": 90,      # mg
     "vitamin A, µg": 900,     # µg
     "vitamin B12, µg": 2.4,   # µg
-	"thiamin, mg": 1.2,		  # mg
+	"thiamin, mg": 1.2,   # mg
 	"vitamin B12": 2.4,       # µg
 	"vitamin D, µg": 20,      # µg
     "vitamin E, µg": 4,		  # µg
